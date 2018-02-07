@@ -1,6 +1,6 @@
 import numpy as np
-from shapely.geometry import Polygon, Point
-
+from shapely.geometry import Polygon, Point, LineString
+from shapely import affinity
 
 class PushedObject(object):
     """
@@ -17,19 +17,45 @@ class PushedObject(object):
             self.pressure_option = pressure_option
             self.presure_weights = self.assign_pressure(self.support_points)
             self.ls_coeff = self.compute_limit_surface_coeffs()
-        
+
         print 'Object init DONE'
 
-    def update_pose(self,  discrtimestep, v_o, omega):
+    def update_pose(self, discrtimestep, v_o, omega):
         displacements = discrtimestep*np.asarray([v_o[0],v_o[1],omega])
         self.pose = self.pose + displacements
+    
+    def eval_contact(self,pusher_line,pose,v_push):
+        # displacements = discrtimestep*np.asarray([v_o[0],v_o[1],omega])
+        # pose = self.pose + displacements
+        x,y,theta = pose
+        new_poly = affinity.affine_transform(self.poly,[np.cos(theta),-np.sin(theta),np.sin(theta),np.cos(theta),x,y])
+        intersects = list(pusher_line.intersection(new_poly).coords)
+        new_contact_point = np.array(intersects[0])
+        dist = np.linalg.norm(new_contact_point-np.array(pusher_line.coords)[0])
+        for pt in intersects[1:]:
+            new_dist = np.linalg.norm(pt-np.array(pusher_line.coords)[0])
+            if dist > new_dist:
+                new_contact_point = pt
+                dist = new_dist
+        push_vec = v_push/np.linalg.norm(v_push)
 
-    def update_contact(self, contact_point, contact_normal, discrtimestep, v_o, omega, v_slip):
-        new_contact_point = contact_point + discrtimestep*np.asarray(v_slip)
-        theta = self.pose[2]
-        T = np.array([[np.cos(theta),-np.sin(theta)],
-                      [np.sin(theta), np.cos(theta)]])
-        new_contact_normal = np.dot(T,contact_normal)
+        temp_line = LineString([np.array(pusher_line.coords)[0],np.array(pusher_line.coords)[1]+0.1*np.array(push_vec[1],-push_vec[0])])
+        temp_intersects = list(temp_line.intersection(new_poly).coords)
+        contact_neighbor = np.array(temp_intersects[0])
+        dist = np.linalg.norm(contact_neighbor-np.array(temp_line.coords)[0])
+        for pt in temp_intersects[1:]:
+            new_dist = np.linalg.norm(pt-np.array(temp_line.coords)[0])
+            if dist > new_dist:
+                contact_neighbor = pt
+                dist = new_dist
+        tangential = contact_neighbor-new_contact_point
+        new_contact_normal = np.array([tangential[1],-tangential[0]])
+        if np.dot(new_contact_normal,push_vec)>0:
+            new_contact_normal = -new_contact_normal/np.linalg.norm(new_contact_normal)
+        else:
+            new_contact_normal = new_contact_normal/np.linalg.norm(new_contact_normal)
+        # import IPython
+        # IPython.embed()
         return new_contact_point, new_contact_normal
     
     def assign_pressure(self,support_points):

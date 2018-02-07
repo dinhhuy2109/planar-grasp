@@ -21,8 +21,8 @@ class MotionModel(object):
             f2 = fn-ft
             fl = f1/np.linalg.norm(f1) if np.linalg.norm(f1) != 0 else f1
             fr = f2/np.linalg.norm(f2) if np.linalg.norm(f2) != 0 else f2
-            tau_l = np.cross(contact_points[i]),fl)
-            tau_r = np.cross(contact_points[i]),fr)
+            tau_l = contact_points[i][0]*fl[1] - contact_points[i][1]*fl[0]
+            tau_r = contact_points[i][0]*fr[1] - contact_points[i][1]*fr[0]
             fc_edges.append([fl,fr,tau_l,tau_r])
             # import IPython
             # IPython.embed()
@@ -57,15 +57,15 @@ class MotionModel(object):
         return v_o, omega, v_slip, contact_mode
 
     def compute_motion_cone(self,fc_edges):
-        v_lx = self.obj.ls_coeff**2*(fc_edges[0][0]/fc_edges[2]) # v_lx/omega
-        v_ly = self.obj.ls_coeff**2*(fc_edges[0][1]/fc_edges[2]) # v_ly/omega
-        v_rx = self.obj.ls_coeff**2*(fc_edges[1][0]/fc_edges[3])
-        v_ry = self.obj.ls_coeff**2*(fc_edges[1][1]/fc_edges[3])
+        v_lx = self.obj.ls_coeff**2*(fc_edges[0][0]/fc_edges[2])*np.sign(fc_edges[2]) # v_lx/omega
+        v_ly = self.obj.ls_coeff**2*(fc_edges[0][1]/fc_edges[2])*np.sign(fc_edges[2])# v_ly/omega
+        v_rx = self.obj.ls_coeff**2*(fc_edges[1][0]/fc_edges[3])*np.sign(fc_edges[3])
+        v_ry = self.obj.ls_coeff**2*(fc_edges[1][1]/fc_edges[3])*np.sign(fc_edges[3])
         vl = np.array([v_lx,v_ly])
         vr = np.array([v_rx,v_ry])
         vc_edges = [vl,vr]
-        import IPython
-        IPython.embed()
+        # import IPython
+        # IPython.embed()
         return vc_edges
 
     def determine_contact_model(self,v_push, vc_edges):
