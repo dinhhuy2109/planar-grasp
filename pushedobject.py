@@ -1,6 +1,7 @@
 import numpy as np
 from shapely.geometry import Polygon, Point, LineString
 from shapely import affinity
+import IPython
 
 class PushedObject(object):
     """
@@ -11,6 +12,8 @@ class PushedObject(object):
         if self.object_type is 'polygon':
             self.pose = pose
             self.poly = poly
+            self.poly_world = affinity.rotate(self.poly,self.pose[2], origin='centroid', use_radians=True)
+            self.poly_world = affinity.translate(self.poly_world,self.pose[0],self.pose[1])
             self.support_points = []
             self.num_support_points = num_support_points
             self.grid_support_points(num_support_points,'polygon')
@@ -20,16 +23,46 @@ class PushedObject(object):
 
         print 'Object init DONE'
 
-    def update_pose(self, discrtimestep, v_o, omega):
+
+    def rotation(self,pt,angle):
+        return np.array([np.cos(angle)*pt[0] - np.sin(angle)*pt[1],np.sin(angle)*pt[0] + np.cos(angle)*pt[1]])
+
+    def compute_pose(self,timestep,v_o,omega):
+        d = timestep*np.asarray([v_o[0],v_o[1],omega])
+        pts = list(self.poly_world.exterior.coords)[:-1]
+        init_pts = list(self.poly.exterior.coords)[:-1]
+        new_pts = []
+        self.pose = self.pose + d
+        for i in range(len(pts)):
+            new_pts.append(d[:2]+np.array([d[2]*init_pts[i][-1],-d[2]*init_pts[i][0]])+(pts[i]-np.asarray(self.poly_world.centroid.xy).reshape(2)) + np.asarray(self.poly_world.centroid.xy).reshape(2))
+
+
+        new_poly = affinity.rotate(self.poly,self.pose[2], origin='centroid', use_radians=True)
+        new_poly = affinity.translate(new_poly,self.pose[0],self.pose[1])
+        print np.asarray(new_poly.centroid.xy).reshape(2),list(new_poly.exterior.coords)[0] ,'\n', np.asarray(Polygon(new_pts).centroid.xy).reshape(2),list(Polygon(new_pts).exterior.coords)[0]
+        
+        return Polygon(new_pts)
+    
+    def eval_pose(self, discrtimestep, v_o, omega):
         displacements = discrtimestep*np.asarray([v_o[0],v_o[1],omega])
-        self.pose = self.pose + displacements
+        return self.pose + displacements
+        # self.pose = self.pose + displacements
+
+    def update_pose(self, pose):
+        self.pose = pose
+        self.poly_world = affinity.rotate(self.poly,self.pose[2], origin='centroid', use_radians=True)
+        self.poly_world = affinity.translate(self.poly_world,self.pose[0],self.pose[1])
+        return True
     
     def eval_contact(self,pusher_line,pose,v_push):
-        # displacements = discrtimestep*np.asarray([v_o[0],v_o[1],omega])
-        # pose = self.pose + displacements
         x,y,theta = pose
-        new_poly = affinity.affine_transform(self.poly,[np.cos(theta),-np.sin(theta),np.sin(theta),np.cos(theta),x,y])
-        intersects = list(pusher_line.intersection(new_poly).coords)
+        new_poly = affinity.rotate(self.poly,pose[2], origin='centroid', use_radians=True)
+        new_poly = affinity.translate(new_poly,pose[0],pose[1])
+        dummy = pusher_line.intersection(new_poly)
+        if not dummy.is_empty:
+            intersects = list(dummy.coords)
+        else:
+            return False, False, False
         new_contact_point = np.array(intersects[0])
         dist = np.linalg.norm(new_contact_point-np.array(pusher_line.coords)[0])
         for pt in intersects[1:]:
@@ -54,9 +87,7 @@ class PushedObject(object):
             new_contact_normal = -new_contact_normal/np.linalg.norm(new_contact_normal)
         else:
             new_contact_normal = new_contact_normal/np.linalg.norm(new_contact_normal)
-        # import IPython
-        # IPython.embed()
-        return new_contact_point, new_contact_normal
+        return new_contact_point, new_contact_normal, True
     
     def assign_pressure(self,support_points):
         if self.pressure_option is 'uniform':
