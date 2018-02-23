@@ -12,8 +12,7 @@ class PushedObject(object):
         if self.object_type is 'polygon':
             self.pose = pose
             self.poly = poly
-            self.poly_world = affinity.rotate(self.poly,self.pose[2], origin='centroid', use_radians=True)
-            self.poly_world = affinity.translate(self.poly_world,self.pose[0],self.pose[1])
+            self.poly_world = self.compute_poly(pose)
             self.support_points = []
             self.num_support_points = num_support_points
             self.grid_support_points(num_support_points,'polygon')
@@ -23,41 +22,34 @@ class PushedObject(object):
 
         print 'Object init DONE'
 
-
-    def rotation(self,pt,angle):
-        return np.array([np.cos(angle)*pt[0] - np.sin(angle)*pt[1],np.sin(angle)*pt[0] + np.cos(angle)*pt[1]])
-
-    def compute_pose(self,timestep,v_o,omega):
-        d = timestep*np.asarray([v_o[0],v_o[1],omega])
-        pts = list(self.poly_world.exterior.coords)[:-1]
-        init_pts = list(self.poly.exterior.coords)[:-1]
-        new_pts = []
-        self.pose = self.pose + d
-        for i in range(len(pts)):
-            new_pts.append(d[:2]+np.array([d[2]*init_pts[i][-1],-d[2]*init_pts[i][0]])+(pts[i]-np.asarray(self.poly_world.centroid.xy).reshape(2)) + np.asarray(self.poly_world.centroid.xy).reshape(2))
-
-
-        new_poly = affinity.rotate(self.poly,self.pose[2], origin='centroid', use_radians=True)
-        new_poly = affinity.translate(new_poly,self.pose[0],self.pose[1])
-        print np.asarray(new_poly.centroid.xy).reshape(2),list(new_poly.exterior.coords)[0] ,'\n', np.asarray(Polygon(new_pts).centroid.xy).reshape(2),list(Polygon(new_pts).exterior.coords)[0]
-        
-        return Polygon(new_pts)
     
     def eval_pose(self, discrtimestep, v_o, omega):
-        displacements = discrtimestep*np.asarray([v_o[0],v_o[1],omega])
-        return self.pose + displacements
-        # self.pose = self.pose + displacements
+        #local
+        # IPython.embed()
+        x,y,theta= discrtimestep*np.asarray([v_o[0],v_o[1],omega])
+        T_ = np.array([[np.cos(theta),-np.sin(theta),x],
+                      [np.sin(theta), np.cos(theta),y],
+                      [0.,0.,1.]])
+        return np.dot(self.pose,T_)
 
     def update_pose(self, pose):
         self.pose = pose
-        self.poly_world = affinity.rotate(self.poly,self.pose[2], origin='centroid', use_radians=True)
-        self.poly_world = affinity.translate(self.poly_world,self.pose[0],self.pose[1])
+        pts = list(self.poly.exterior.coords)[:-1]
+        new_pts = []
+        for pt in pts:
+            new_pts.append(np.dot(self.pose[:2,:2],pt)+self.pose[:2,2])
+        self.poly_world = Polygon(new_pts)
         return True
+
+    def compute_poly(self,pose):
+        pts = list(self.poly.exterior.coords)[:-1]
+        new_pts = []
+        for pt in pts:
+            new_pts.append(np.dot(pose[:2,:2],pt)+pose[:2,2])
+        return Polygon(new_pts)
     
     def eval_contact(self,pusher_line,pose,v_push):
-        x,y,theta = pose
-        new_poly = affinity.rotate(self.poly,pose[2], origin='centroid', use_radians=True)
-        new_poly = affinity.translate(new_poly,pose[0],pose[1])
+        new_poly = self.compute_poly(pose)
         dummy = pusher_line.intersection(new_poly)
         if not dummy.is_empty:
             intersects = list(dummy.coords)

@@ -1,5 +1,5 @@
 import numpy as np
-
+import IPython
 
 class MotionModel(object):
     """
@@ -24,8 +24,6 @@ class MotionModel(object):
             tau_l = contact_points[i][0]*fl[1] - contact_points[i][1]*fl[0]
             tau_r = contact_points[i][0]*fr[1] - contact_points[i][1]*fr[0]
             fc_edges.append([fl,fr,tau_l,tau_r])
-            # import IPython
-            # IPython.embed()
         return fc_edges
 
     def compute_vel_single_contact(self,v_push,contact_point,contact_normal,contact_mu):
@@ -35,26 +33,30 @@ class MotionModel(object):
         c = self.obj.ls_coeff
         x_c = contact_point[0]
         y_c = contact_point[1]
-        vp_x = v_push[0]
-        vp_y = v_push[1]
         if contact_mode is 'sticking':
-            v_x = ((c**2+x_c**2)*vp_x + x_c*y_c*vp_y)/(c**2+x_c**2+y_c**2)
-            v_y = ((c**2+y_c**2)*vp_y + x_c*y_c*vp_x)/(c**2+x_c**2+y_c**2)
-            v_o = np.array([v_x,v_y])
+            v_o = v_push
+            v_x = ((c**2+x_c**2)*v_o[0] + x_c*y_c*v_o[1])/(c**2+x_c**2+y_c**2)
+            v_y = ((c**2+y_c**2)*v_o[1] + x_c*y_c*v_o[0])/(c**2+x_c**2+y_c**2)
+            v_obj = np.array([v_x,v_y])
             omega = (x_c*v_y-y_c*v_x)/(c**2)
             v_slip = np.zeros(2)
         elif contact_mode is 'leftsliding':
             k = np.dot(v_push,-contact_normal)/np.dot(vc_edges[1],-contact_normal)
-            v_o = k*vc_edges[0]
+            v_o = k*vc_edges[1]
+            v_x = ((c**2+x_c**2)*v_o[0] + x_c*y_c*v_o[1])/(c**2+x_c**2+y_c**2)
+            v_y = ((c**2+y_c**2)*v_o[1] + x_c*y_c*v_o[0])/(c**2+x_c**2+y_c**2)
+            v_obj = np.array([v_x,v_y])
             omega = (x_c*v_o[1]-y_c*v_o[0])/(c**2)
             v_slip = v_push - v_o
         elif contact_mode is 'rightsliding':
             k = np.dot(v_push,-contact_normal)/np.dot(vc_edges[0],-contact_normal)
-            v_o = k*vc_edges[1]
-            omega = (x_c*v_o[1]-y_c*v_o[0])/(c**2)
+            v_o = k*vc_edges[0]
+            v_x = ((c**2+x_c**2)*v_o[0] + x_c*y_c*v_o[1])/(c**2+x_c**2+y_c**2)
+            v_y = ((c**2+y_c**2)*v_o[1] + x_c*y_c*v_o[0])/(c**2+x_c**2+y_c**2)
+            v_obj = np.array([v_x,v_y])
+            omega = (x_c*v_y-y_c*v_x)/(c**2)
             v_slip = v_push - v_o
-
-        return v_o, omega, v_slip, contact_mode
+        return v_obj, omega, v_slip, contact_mode
 
     def compute_motion_cone(self,fc_edges):
         v_lx = self.obj.ls_coeff**2*(fc_edges[0][0]/fc_edges[2])*np.sign(fc_edges[2]) # v_lx/omega
