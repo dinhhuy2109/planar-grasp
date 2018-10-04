@@ -50,20 +50,21 @@ def object_hand_motion(t, x, pusher):
 # import IPython
 
 poly = Polygon([(63./2.,26./2.),(-63./2.,26./2),(-63./2.,-26./2.),(63./2.,-26./2.)])
-pose = [0.,0.,0.] #x,y,theta in world frame
+pose = [0.,0.,-np.pi/3.] #x,y,theta in world frame
 pose = np.array([[np.cos(pose[2]),-np.sin(pose[2]),pose[0]],
               [np.sin(pose[2]), np.cos(pose[2]),pose[1]],
               [0,0,1]])
-num_support_points = 100
+num_support_points = 10
 pressure_option = 'uniform'
 
 obj = pushedobject.PushedObject('polygon',poly,pose,num_support_points,pressure_option)
 
-contact_mu = 0.3
-
+contact_mu = 0.5
+a,b = (63./2.,26./2)
 motion = motionmodel.MotionModel(obj, contact_mu)
 v_push_world = np.array([0.,20.]) # mm/s (in world)
-pusher_starting_point = np.array([63/2.5,-30./2.]) # mm (in world)
+pusher_starting_point = list(obj.poly_world.exterior.coords)[3][:2] - np.array([0,-1]) # mm (in world)
+IPython.embed()
 pusher_line = LineString([pusher_starting_point,pusher_starting_point+1000*v_push_world/np.linalg.norm(v_push_world)])
 pusher = (v_push_world, pusher_line)
 contact_point_world, contact_normal_world, in_contact = obj.eval_contact(pusher_line,pose,v_push_world)
@@ -126,7 +127,7 @@ patch = PolygonPatch(obj.poly_world, alpha=0.25, zorder=2)
 ax.add_patch(patch)
 ax.plot(contact_point_world[0],contact_point_world[1], 'o', color='#999999')
 
-discrtimestep= 1e-2
+discrtimestep= 1e-1
 t=0
 while t<3:
     t +=discrtimestep
